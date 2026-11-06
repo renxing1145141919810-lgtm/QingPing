@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">清屏</string>
+    <string name="accessibility_description">识别页面中明确标注的广告关闭或跳过控件，并统计成功操作次数。</string>
+</resources>
