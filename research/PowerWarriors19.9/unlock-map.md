@@ -4,11 +4,12 @@
 - 游戏：Power Warriors
 - 版本：19.9（由用户提供 APK 文件名确认）
 - 引擎：Unity IL2CPP
+- 架构：ARM64 / AArch64；libil2cpp.so 为 Android ELF64
 - Metadata Version：分析日志显示 31；Il2CppDumper 曾提示文件可能受保护，随后按版本 29 完成导出。版本识别存在异常，需以原始二进制和工具输出复核。
-- 当前证据：用户上传的 dump(1).cs / DummyDll.zip / script.zip / il2cpp.h；本仓库不存放第三方原版 APK 或完整反编译资源。
+- 当前证据：dump(1).cs、global-metadata.dat、script.zip、libil2cpp.so；本仓库不存放第三方原版 APK 或完整反编译资源。
 
 ## ProfileManager
-以下 RVA 来自 dump.cs，属于当前 19.9 分析样本：
+以下 RVA 来自 dump.cs，并已在当前 libil2cpp.so 中核对关键位置：
 
 | 功能 | 方法 | RVA |
 |---|---|---:|
@@ -23,12 +24,18 @@
 | 查询 Challenge 等级 | GetChallengeLevel(int challengeID) | 0x8BF740 |
 | 设置 Challenge 等级 | SetChallengeLevel(int challengeID, int level) | 0x8C2884 |
 | 重置 Saga 解锁状态 | ResetAllSagaLevelsUnlockStatus() | 0x8C29DC |
-| 全局解锁候选入口 | UnlockAll() | 0x8C2AE0 |
+| 名为 UnlockAll 的入口 | UnlockAll() | 0x8C2AE0 |
 | 重置全部状态 | ResetAll() | 0x8C2B28 |
 
+### 已完成的机器码核对
+对 0x8C2AE0 附近进行 AArch64 反汇编后，发现 UnlockAll() 的主体最终调用 PlayerPrefs.SetInt(string key, int value)，传入的 value 为 1。也就是说，它写入的是一个单独的整数偏好项，而不是在该函数中逐个遍历角色、Saga 和 Mission。该 key 的实际字符串内容尚未从静态数据中可靠解析，因此不能把这个方法直接当作“解锁全部内容”的实现。
+
+0x8C29DC 的 ResetAllSagaLevelsUnlockStatus() 则出现了循环，并调用 SetSagaLevel(sagaID, levelID, 0) 一类写入路径；不要调用它来实现解锁。
+
 ### 解释边界
-- 这些接口证明游戏存在独立的角色、Saga、Mission、Challenge 状态管理。
-- UnlockAll() 目前只是候选入口；dump.cs 没有函数体，不能确认它覆盖哪些类别。
+- ProfileManager 确实提供独立的角色、Saga、Mission、Challenge 状态接口。
+- UnlockAll() 目前已确认是设置单个 PlayerPrefs 整数键为 1；其键名和游戏逻辑用途仍待确认。
+- dump.cs 不含函数体；单凭方法名不能推断覆盖范围。
 - ResetAll() 可能影响进度，不能在未反汇编前调用或修改。
 
 ## 商店相关入口
@@ -41,7 +48,7 @@
 | 全部解锁按钮 | UnlockAllButtonPressed() | 0xBD3194 |
 | 刷新商店状态 | RefreshStatus() | 0xBD32D4 |
 
-商店按钮函数可能涉及广告、付费或界面逻辑；目前没有证据表明它等同于本地数据层的完整解锁函数。
+对 0xBD3194 的初步反汇编显示其调用 AudioManager.PlayAudio；不能仅凭方法名认定它直接完成了解锁。需要继续检查函数边界、后续调用和相关 UI 事件。
 
 ## 竞技场 / Tournament
 目前从 dump.cs 已看到以下 Tournament 配置/状态接口：
@@ -55,9 +62,9 @@
 这些名称说明存在 Tournament 设置与奖励状态，但尚不能证明有“竞技场解锁”字段。下一步应从模式选择 UI、Tournament 奖励流程及 ProfileManager 相关存档字段追踪，不应把所有竞技模式一概视为 Arena。
 
 ## 下一步分析顺序
-1. 读取与当前 APK 完全匹配的 ARM64 libil2cpp.so，确认 RVA 对应的函数边界与机器码。
-2. 反汇编 ProfileManager.UnlockAll，追踪它调用的角色、Saga、Mission、Challenge 写入函数。
-3. 检查 StoreSceneManager.UnlockAllButtonPressed，确认它是付费/广告界面入口还是单纯状态写入。
+1. 解析 UnlockAll() 使用的 PlayerPrefs key，并追踪该 key 的读取位置，确定它代表的真实功能。
+2. 反汇编 UnlockCharacter、UnlockSagaLevel、UnlockMissionLevel 和 Challenge 写入路径，确认数据结构及参数范围。
+3. 检查 StoreSceneManager 的按钮事件绑定和完整函数体，区分音效、广告、付费与本地状态逻辑。
 4. 追踪 Tournament / Battle Survival / Challenge 的解锁判定与存档键。
 5. 只有确认数据结构与写入路径后，才制作可回滚的本地补丁。
 
