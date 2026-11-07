@@ -1,24 +1,26 @@
 # Power Warriors 19.9 本地解锁研究
 
-本目录记录对用户提供的 Power Warriors 19.9 Android APK 的静态分析。目标是研究本地单机存档/解锁状态，不分发原版游戏资源。
+本目录记录对用户提供的 Power Warriors 19.9 Android IL2CPP 文件的静态分析。目标是研究本地单机存档/解锁状态，不分发原版游戏资源。
 
 ## 目标
 - 解锁可解锁角色
 - 解锁 Story / Saga 关卡
 - 解锁 Missions 关卡
-- 确认并处理 Arena 相关内容（目前尚未定位到明确的 Arena 解锁入口）
+- 确认并处理 Arena / Tournament 相关内容（目前尚未定位到明确的竞技场解锁字段）
 
 ## 当前进度
-- [x] 确认目标为 Unity IL2CPP 游戏
-- [x] 从 DummyDll / dump.cs 确认 ProfileManager 的角色、Saga、Mission、Challenge 状态接口
+- [x] 确认 Unity IL2CPP、ARM64 / AArch64
+- [x] 从 dump.cs 确认 ProfileManager 的角色、Saga、Mission、Challenge 状态接口
 - [x] 记录关键 RVA
-- [ ] 从原始 libil2cpp.so 核对函数机器码与调用关系
-- [ ] 明确 UnlockAll() 的实际覆盖范围
-- [ ] 定位竞技场/锦标赛等模式的解锁条件
-- [ ] 制作仅供本地测试的补丁
+- [x] 反汇编核对 ProfileManager.UnlockAll：它设置 SPrefs 的 UnlockAll 键为 1，并非逐项遍历全部角色和关卡
+- [x] 确认 HomeSceneManager.UnlockAllPressed 会调用该标志写入入口
+- [ ] 追踪 UnlockAll 标志的读取点及实际影响范围
+- [ ] 反汇编角色、Saga、Mission、Challenge 的状态写入逻辑
+- [ ] 定位竞技场 / Tournament 的真实解锁条件
+- [ ] 获取原始 APK，制作可回滚的本地补丁
 - [ ] 在目标设备验证，并确认原始存档可恢复
 
 ## 重要说明
-dump.cs 是 IL2CPP 元数据导出的声明清单。方法体显示为 { }，不包含真实实现。因此，方法名叫 UnlockAll 并不能单凭名称证明它会解锁全部角色、所有剧情关卡和竞技场。必须继续检查对应版本的 libil2cpp.so，并在修改前备份原 APK 与存档。
+dump.cs 只提供元数据声明，不包含方法体；当前结论以同一分析样本的 ARM64 libil2cpp.so 反汇编和 script.json 地址映射为补充。RVA 不能直接套用到其他游戏版本。
 
-当前没有生成或上传修改版 APK。不要把此目录中的 RVA 当作可直接套用到其他游戏版本的固定偏移。
+当前工作目录有 libil2cpp.so、global-metadata.dat 和 script.json，但没有原始 APK。因此尚不能重打包或签名生成可安装 APK。
